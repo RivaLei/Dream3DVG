@@ -1,0 +1,77 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "cmake",
+            "request": "launch",
+            "name": "Debug portfile(s)",
+            "cmakeDebugType": "external",
+            "pipeName": "/tmp/vcpkg_ext_portfile_dbg",
+            "preLaunchTask": "Debug vcpkg commands"
+        },
+        {
+            "name": "Dream3DVG - Benz Car (Sketch)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/svg_render.py",
+            "args": [
+                "x=dream3dvg",
+                "seed=1",
+                "x.style=sketch",
+                "x.num_paths=32",
+                "prompt=A benz car",
+                "result_path=./workspace/3dvg/Benz",
+                "x.camera_param.init_prompt=A benz car"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "Dream3DVG - Crab (Iconography)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/svg_render.py",
+            "args": [
+                "x=dream3dvg",
+                "seed=1",
+                "x.style=iconography",
+                "x.num_paths=128",
+                "prompt=A crab",
+                "result_path=./workspace/3dvg/Crab",
+                "x.camera_param.init_prompt=A crab"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "justMyCode": false
+        },
+        {
+            "name": "Dream3DVG - Custom Debug",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/svg_render.py",
+            "args": [
+                "x=dream3dvg",
+                "seed=1",
+                "x.style=sketch",
+                "x.num_paths=32",
+                "prompt=A horse",
+                "result_path=./workspace/3dvg/Debug",
+                "x.camera_param.init_prompt=A horse"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "justMyCode": false,
+            "stopOnEntry": false
+        }
+    ]
+}

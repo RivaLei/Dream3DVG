@@ -1,17 +1,10 @@
-#!/bin/bash
-
-set -e
-
-# Conda setup and environment creation
-eval "$(conda shell.bash hook)"
-
-conda create --name 3dvg python=3.10 --yes
-conda activate 3dvg
+111
 echo "The conda environment was successfully created"
 
 # Install PyTorch and related libraries
 # NOTE: use "nvcc -V" to find a cuda version satisfied with your systerm, change the command below following "https://pytorch.org/get-started/previous-versions/"
 conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.7 -c pytorch -c nvidia
+
 
 echo "Pytorch installation is complete."
 
