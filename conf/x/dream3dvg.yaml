@@ -1,187 +1,248 @@
-method: 'dream3dvg'
-from_dataset: False
-use_gaussian: True
-use_pseudo: True
-perp_neg: True
+# =====================================================================
+# Dream3DVG 核心配置参数 - Core Configuration Parameters
+# =====================================================================
 
-image_size: 512 # canvas size
-path_svg: ~ # if you want to load a svg file and train from it
-mask_object: False # if the target image contains background, it's better to mask it out
-fix_scale: False  # if the target image is not squared, it is recommended to fix the scale
+method: 'dream3dvg'         # 训练方法名称 - Training method identifier
+from_dataset: False         # 是否使用图像数据集约束训练(True: 图像引导, False: 文本引导)
+                            # Whether to use image dataset constraints (True: image-guided, False: text-guided)
+use_gaussian: True          # 是否启用3D高斯渲染模块 - Enable 3D Gaussian splatting module
+use_pseudo: True            # 是否使用伪3D高斯图像进行损失计算 - Use pseudo 3D Gaussian images for loss computation
+perp_neg: True              # 是否启用垂直负样本方法增强训练稳定性 - Enable perpendicular negative sampling for training stability
 
-# train
-num_iter: 2000
-num_stages: 1 # training stages, you can train x strokes, then freeze them and train another x strokes etc
-lr_schedule: False
-lr_decay_rate: 0.1
-decay_steps: [ 1000, 1500 ]
-lr: 0.001
-color_lr: 0.001
-color_vars_threshold: 0.0 # uncomment the code
-max_width: 50 # stroke width
-use_sfm: True
-batch: 10 # for camera sampling
-C_batch_size: 4
-desc_freq: 5
-eval_freq: 500
+# =====================================================================
+# 图像和文件配置 - Image and File Configuration
+# =====================================================================
 
-# stroke attrs
-style: ~
-num_paths: 32 # number of strokes
-width: 1.5 # stroke width
-control_points_per_seg: 4
-num_segments: 4
-eps: 1.0e-8
-proj_mode: 'persp'
-proj_scale: 1.0
-blender: False
-optim_opacity: True # if True, the stroke opacity is optimized
-optim_width: False  # if True, the stroke width is optimized
-optim_rgba: False # if True, the stroke RGBA is optimized
-opacity_delta: 0 # stroke pruning
-use_viewnet: True
+image_size: 512             # 画布尺寸(像素) - Canvas size in pixels
+path_svg: ~                 # SVG文件路径,用于从现有SVG继续训练 - SVG file path for continuing training from existing SVG
+mask_object: False          # 是否对目标图像进行背景掩码处理 - Whether to mask background in target image
+fix_scale: False            # 是否修正非正方形图像的尺寸比例 - Whether to fix aspect ratio for non-square images
 
-# gs
+# =====================================================================
+# 训练参数配置 - Training Parameters Configuration
+# =====================================================================
+
+num_iter: 2000              # 总训练迭代次数 - Total training iterations
+num_stages: 1               # 训练阶段数(可分阶段训练不同笔画数量) - Training stages (can train different stroke counts per stage)
+lr_schedule: False          # 是否启用学习率调度 - Enable learning rate scheduling
+lr_decay_rate: 0.1          # 学习率衰减比例 - Learning rate decay ratio
+decay_steps: [ 1000, 1500 ] # 学习率衰减的迭代步数 - Iteration steps for learning rate decay
+lr: 0.001                   # 基础学习率 - Base learning rate
+color_lr: 0.001             # 颜色参数学习率 - Color parameter learning rate
+color_vars_threshold: 0.0   # 颜色变量阈值(用于笔画筛选) - Color variance threshold for stroke filtering
+max_width: 50               # 笔画最大宽度 - Maximum stroke width
+use_sfm: True               # 是否使用运动结构恢复 - Enable Structure from Motion
+batch: 10                   # 相机采样批次大小 - Camera sampling batch size
+C_batch_size: 4             # 渲染批次大小 - Rendering batch size
+desc_freq: 5                # 描述信息输出频率 - Description output frequency
+eval_freq: 500              # 评估频率(每N次迭代) - Evaluation frequency (every N iterations)
+
+# =====================================================================
+# 笔画属性配置 - Stroke Attributes Configuration
+# =====================================================================
+
+style: ~                    # 渲染风格(sketch/iconography/ink/painting) - Rendering style
+num_paths: 32               # 笔画总数量 - Total number of strokes/paths
+width: 1.5                  # 初始笔画宽度 - Initial stroke width
+control_points_per_seg: 4   # 每段贝塞尔曲线的控制点数 - Control points per Bezier curve segment
+num_segments: 4             # 每条笔画的段数 - Number of segments per stroke
+eps: 1.0e-8                 # 数值稳定性epsilon值 - Numerical stability epsilon
+proj_mode: 'persp'          # 投影模式(透视投影) - Projection mode (perspective)
+proj_scale: 1.0             # 投影缩放因子 - Projection scaling factor
+blender: False              # 是否启用Blender渲染模式 - Enable Blender rendering mode
+optim_opacity: True         # 是否优化笔画透明度 - Optimize stroke opacity
+optim_width: False          # 是否优化笔画宽度 - Optimize stroke width
+optim_rgba: False           # 是否优化笔画RGBA颜色 - Optimize stroke RGBA colors
+opacity_delta: 0            # 透明度剪枝阈值(移除低透明度笔画) - Opacity pruning threshold
+use_viewnet: True           # 是否使用视角相关网络 - Enable view-dependent network
+
+# =====================================================================
+# 3D高斯参数配置 - 3D Gaussian Splatting Parameters
+# =====================================================================
+
 gaussian_param:
-  sh_degree: 0
+  sh_degree: 0              # 球谐函数阶数(0=无球谐,纯颜色) - Spherical harmonics degree (0=no SH, pure color)
 
-  percent_dense: 0.003
-  densify_from_iter: 100
-  densify_until_iter: 3000
-  densification_interval: 100
-  densify_grad_threshold: 0.00075 # 2e-4?
-  opacity_reset_interval: 300
+  # 高斯密集化参数 - Gaussian Densification Parameters
+  percent_dense: 0.003      # 密集化百分比阈值 - Densification percentage threshold
+  densify_from_iter: 100    # 开始密集化的迭代数 - Start densification at iteration
+  densify_until_iter: 3000  # 停止密集化的迭代数 - Stop densification at iteration
+  densification_interval: 100 # 密集化执行间隔 - Densification execution interval
+  densify_grad_threshold: 0.00075 # 密集化梯度阈值 - Gradient threshold for densification
+  opacity_reset_interval: 300     # 透明度重置间隔 - Opacity reset interval
 
-  position_lr_init: 0.00016
-  position_lr_final: 0.0000016
-  position_lr_delay_mult: 0.01
-  position_lr_max_steps: 30_000
-  feature_lr: 0.0050
-  feature_lr_final: 0.0030
+  # 位置参数学习率 - Position Parameter Learning Rates
+  position_lr_init: 0.00016    # 位置学习率初始值 - Initial position learning rate
+  position_lr_final: 0.0000016 # 位置学习率最终值 - Final position learning rate
+  position_lr_delay_mult: 0.01 # 位置学习率延迟乘数 - Position learning rate delay multiplier
+  position_lr_max_steps: 30_000 # 位置学习率最大步数 - Max steps for position learning rate
+  feature_lr: 0.0050           # 特征学习率 - Feature learning rate
+  feature_lr_final: 0.0030     # 特征最终学习率 - Final feature learning rate
 
-  scaling_lr_final: 0.001
-  rotation_lr_final: 0.0002
+  # 其他参数学习率 - Other Parameter Learning Rates
+  scaling_lr_final: 0.001   # 缩放最终学习率 - Final scaling learning rate
+  rotation_lr_final: 0.0002 # 旋转最终学习率 - Final rotation learning rate
+  opacity_lr: 0.05          # 透明度学习率 - Opacity learning rate
+  scaling_lr: 0.005         # 缩放学习率 - Scaling learning rate
+  rotation_lr: 0.001        # 旋转学习率 - Rotation learning rate
 
-  opacity_lr: 0.05
-  scaling_lr: 0.005
-  rotation_lr: 0.001
+  # 几何和渲染参数 - Geometry and Rendering Parameters
+  geo_iter: 0               # 几何迭代次数 - Geometry iterations
+  as_latent_ratio: 0.2      # 潜在空间比例 - Latent space ratio
+  white_background: True    # 是否使用白色背景 - Use white background
 
-  geo_iter: 0
-  as_latent_ratio: 0.2
+  # 数据增强参数 - Data Augmentation Parameters
+  sh_deg_aug_ratio: 0.1     # 球谐函数增强比例 - Spherical harmonics augmentation ratio
+  bg_aug_ratio: 0.66        # 背景增强比例 - Background augmentation ratio
+  shs_aug_ratio: 0.0        # SH增强比例 - SH augmentation ratio
+  scale_aug_ratio: 1.0      # 缩放增强比例 - Scale augmentation ratio
 
-  white_background: True
+  # 计算选项 - Computation Options
+  convert_SHs_python: False    # 使用Python转换球谐函数 - Convert SH using Python
+  compute_cov3D_python: False  # 使用Python计算3D协方差 - Compute 3D covariance using Python
 
-  sh_deg_aug_ratio: 0.1
-  bg_aug_ratio: 0.66
-  shs_aug_ratio: 0.0
-  scale_aug_ratio: 1.0
+# =====================================================================
+# 相机姿态和场景参数配置 - Camera Pose and Scene Parameters
+# =====================================================================
 
-  convert_SHs_python: False
-  compute_cov3D_python: False
-
-# camera_pose
 camera_param:
-  # init_shape: 'sphere'
-  init_shape: 'pointe'
-  init_prompt: ''
-  reinit_points: False
-  use_pointe_rgb: True
-  use_progressive: True
-  progressive_view_iter: 200
-  scale_up_cameras_iter: 500
-  scale_up_factor: 0.95
-  fovy_scale_up_factor: [0.75, 1.1]
-  phi_scale_up_factor: 1.1
-  radius_range: [5.2, 5.5] #[3.8, 4.5] #[3.0, 3.5]
-  max_radius_range: [3.5, 5.0]
-  default_radius: 3.5
-  theta_range: [45, 105]
-  max_theta_range: [45, 105]
-  phi_range: [-180, 180]
-  max_phi_range: [-180, 180]
-  fovy_range: [0.32, 0.60] # rad
-  max_fovy_range: [0.16, 0.60]
-  rand_cam_gamma: 1.0
-  angle_overhead: 30
-  angle_front: 60
-  render_45: True
-  uniform_sphere_rate: 0
-  image_w: 512
-  image_h: 512 # 512
-  SSAA: 1
-  init_num_pts: 100_000
+  # 初始化参数 - Initialization Parameters
+  # init_shape: 'sphere'      # 备选: 球形初始化 - Alternative: sphere initialization
+  init_shape: 'pointe'        # 初始化形状(使用Pointe模型) - Initialization shape using Pointe model
+  init_prompt: ''             # 初始化提示词 - Initialization prompt
+  reinit_points: False        # 是否重新初始化点云 - Reinitialize point cloud
+  use_pointe_rgb: True        # 是否使用Pointe模型的RGB信息 - Use RGB info from Pointe model
   
-  default_polar: 90
-  default_azimuth: 0
-  default_fovy: 0.55 #20
-  jitter_pose: True
-  jitter_center: 0.05
-  jitter_target: 0.05
-  jitter_up: 0.01
-  device: 'cuda'
+  # 渐进式训练参数 - Progressive Training Parameters
+  use_progressive: True       # 是否启用渐进式相机视角扩展 - Enable progressive camera view expansion
+  progressive_view_iter: 200  # 开始渐进式视角扩展的迭代数 - Start progressive view expansion at iteration
+  scale_up_cameras_iter: 500  # 相机参数放大间隔 - Camera parameter scale-up interval
+  scale_up_factor: 0.95       # 相机距离缩放因子 - Camera distance scaling factor
+  fovy_scale_up_factor: [0.75, 1.1] # 视场角缩放因子[最小,最大] - FOV scaling factors [min, max]
+  phi_scale_up_factor: 1.1    # 方位角缩放因子 - Azimuth scaling factor
+  
+  # 相机位置范围 - Camera Position Ranges
+  radius_range: [5.2, 5.5]    # 当前相机距离范围 - Current camera distance range
+                              # 备选配置: [3.8, 4.5] 或 [3.0, 3.5] - Alternative configs
+  max_radius_range: [3.5, 5.0] # 最大相机距离范围 - Maximum camera distance range
+  default_radius: 3.5         # 默认相机距离 - Default camera distance
+  
+  # 相机角度范围 - Camera Angle Ranges
+  theta_range: [45, 105]      # 当前极角范围(度) - Current polar angle range (degrees)
+  max_theta_range: [45, 105]  # 最大极角范围(度) - Maximum polar angle range (degrees)
+  phi_range: [-180, 180]      # 当前方位角范围(度) - Current azimuth angle range (degrees)
+  max_phi_range: [-180, 180]  # 最大方位角范围(度) - Maximum azimuth angle range (degrees)
+  fovy_range: [0.32, 0.60]    # 当前视场角范围(弧度) - Current field of view range (radians)
+  max_fovy_range: [0.16, 0.60] # 最大视场角范围(弧度) - Maximum field of view range (radians)
+  
+  # 相机采样参数 - Camera Sampling Parameters
+  rand_cam_gamma: 1.0         # 随机相机gamma值 - Random camera gamma value
+  angle_overhead: 30          # 俯视角度阈值(度) - Overhead angle threshold (degrees)
+  angle_front: 60             # 正面角度阈值(度) - Front angle threshold (degrees)
+  render_45: True             # 是否渲染45度视角 - Render 45-degree viewpoints
+  uniform_sphere_rate: 0      # 球面均匀采样率 - Uniform sphere sampling rate
+  
+  # 渲染参数 - Rendering Parameters
+  image_w: 512                # 图像宽度 - Image width
+  image_h: 512                # 图像高度 - Image height
+  SSAA: 1                     # 超采样抗锯齿倍数 - Super-sampling anti-aliasing multiplier
+  init_num_pts: 100_000       # 初始化点云数量 - Initial number of points
+  
+  # 默认相机参数 - Default Camera Parameters
+  default_polar: 90           # 默认极角(度) - Default polar angle (degrees)
+  default_azimuth: 0          # 默认方位角(度) - Default azimuth angle (degrees)
+  default_fovy: 0.55          # 默认视场角(弧度) - Default field of view (radians)
+  
+  # 相机抖动参数 - Camera Jittering Parameters
+  jitter_pose: True           # 是否启用姿态抖动 - Enable pose jittering
+  jitter_center: 0.05         # 中心点抖动幅度 - Center jittering magnitude
+  jitter_target: 0.05         # 目标点抖动幅度 - Target jittering magnitude
+  jitter_up: 0.01             # 上向量抖动幅度 - Up vector jittering magnitude
+  device: 'cuda'              # 计算设备 - Computation device
 
-# ldm
-model_id: "sd21b"
-ldm_speed_up: False
-fp16: True
-enable_xformers: True
-gradient_checkpoint: False
-use_ddim: True
-num_inference_steps: 100
+# =====================================================================
+# 潜在扩散模型配置 - Latent Diffusion Model Configuration
+# =====================================================================
 
-# SDS loss
+model_id: "sd21b"           # 扩散模型ID(Stable Diffusion 2.1 Base) - Diffusion model ID
+ldm_speed_up: False         # 是否启用LDM加速 - Enable LDM speed up
+fp16: True                  # 是否使用半精度浮点数 - Use half precision (FP16)
+enable_xformers: True       # 是否启用xFormers优化 - Enable xFormers optimization
+gradient_checkpoint: False  # 是否启用梯度检查点(节省显存) - Enable gradient checkpointing (save VRAM)
+use_ddim: True              # 是否使用DDIM采样器 - Use DDIM sampler
+num_inference_steps: 100    # 推理步数 - Number of inference steps
+
+# =====================================================================
+# 分数蒸馏采样损失配置 - Score Distillation Sampling Loss Configuration
+# =====================================================================
+
 sds:
-  # method: 'sds'
-  method: 'ism'
-  crop_size: 512
-  augmentations: "affine"
-  guidance_scale: 2.
-  gs_guidance_scale: 7.5
-  grad_scale: 1e-3
-  grad_scale_gs: 1.
-  t_range: [ 0.1, 0.9 ]
-  warmup: 10000
-  perp_neg: True
+  # method: 'sds'            # 备选: 标准SDS方法 - Alternative: standard SDS method
+  method: 'ism'             # SDS方法(ISM: Interval Score Matching) - SDS method
+  crop_size: 512            # 图像裁剪尺寸 - Image crop size
+  augmentations: "affine"   # 数据增强类型(仿射变换) - Data augmentation type (affine transformation)
+  guidance_scale: 2.        # SVG引导强度 - SVG guidance strength
+  gs_guidance_scale: 7.5    # 3D高斯引导强度 - 3D Gaussian guidance strength
+  grad_scale: 1e-3          # SVG梯度缩放因子 - SVG gradient scaling factor
+  grad_scale_gs: 1.         # 3D高斯梯度缩放因子 - 3D Gaussian gradient scaling factor
+  t_range: [ 0.1, 0.9 ]     # 时间步范围[最小,最大] - Timestep range [min, max]
+  warmup: 10000             # 预热迭代数(延迟启动SDS) - Warmup iterations (delay SDS start)
+  perp_neg: True            # 是否启用垂直负样本 - Enable perpendicular negative sampling
 
+  # ISM特定参数 - ISM Specific Parameters
   ism_param:
-    denoise_guidance_scale: 1.0
+    denoise_guidance_scale: 1.0 # 去噪引导强度 - Denoising guidance scale
 
-    xs_delta_t: 200
-    xs_inv_steps: 5
-    xs_eta: 0.0
+    # 扩展采样参数 - Extended Sampling Parameters
+    xs_delta_t: 200         # 扩展采样时间步长 - Extended sampling delta t
+    xs_inv_steps: 5         # 扩展采样逆向步数 - Extended sampling inversion steps
+    xs_eta: 0.0             # 扩展采样eta参数 - Extended sampling eta parameter
     
-    delta_t: 50
-    delta_t_start: 100
+    # 标准采样参数 - Standard Sampling Parameters
+    delta_t: 50             # 标准时间步长 - Standard delta t
+    delta_t_start: 100      # 起始时间步长 - Starting delta t
+
+# =====================================================================
+# CLIP模型配置 - CLIP Model Configuration
+# =====================================================================
 
 clip:
-  model_name: "RN101"  # RN101, ViT-L/14
-  feats_loss_type: "l2" # clip visual loss type, conv layers
-  feats_loss_weights: [ 0,0,1.0,1.0,0 ] # RN based
-  #  feats_loss_weights: [ 0,0,1.0,1.0,0,0,0,0,0,0,0,0 ] # ViT based
-  fc_loss_weight: 0.1 # clip visual loss, fc layer weight
-  augmentations: "affine" # augmentation before clip visual computation
-  num_aug: 4 # num of augmentation before clip visual computation
-  vis_loss: 1 # 1 or 0 for use or disable clip visual loss
-  text_visual_coeff: 0. # cosine similarity between text and img
+  model_name: "RN101"       # CLIP模型名称(RN101/ViT-L/14) - CLIP model name
+  feats_loss_type: "l2"     # CLIP视觉损失类型(卷积层) - CLIP visual loss type (conv layers)
+  feats_loss_weights: [ 0,0,1.0,1.0,0 ]     # RN系列模型的特征层权重 - Feature layer weights for RN models
+  # feats_loss_weights: [ 0,0,1.0,1.0,0,0,0,0,0,0,0,0 ] # ViT系列模型的特征层权重 - Feature layer weights for ViT models
+  fc_loss_weight: 0.1       # CLIP全连接层损失权重 - CLIP fully connected layer loss weight
+  augmentations: "affine"   # CLIP计算前的数据增强类型 - Data augmentation before CLIP computation
+  num_aug: 4                # CLIP计算前的增强数量 - Number of augmentations before CLIP computation
+  vis_loss: 1               # 是否启用CLIP视觉损失(1启用/0禁用) - Enable CLIP visual loss (1=enable/0=disable)
+  text_visual_coeff: 0.     # 文本-图像余弦相似度系数 - Text-image cosine similarity coefficient
+
+# =====================================================================
+# 感知损失配置 - Perceptual Loss Configuration
+# =====================================================================
 
 perceptual:
-  name: "lpips" # dists
-  lpips_net: 'vgg'
-  coeff: 0.2
+  name: "lpips"             # 感知损失类型(LPIPS) - Perceptual loss type
+  lpips_net: 'vgg'          # LPIPS网络骨干(VGG) - LPIPS network backbone
+  coeff: 0.2                # 感知损失系数 - Perceptual loss coefficient
+
+# =====================================================================
+# 损失函数参数配置 - Loss Function Parameters Configuration
+# =====================================================================
 
 loss_params:
-    curve:
-      conv:
-        model_type: RN101
-        conv_loss_type: L2
-        fc_loss_type: Cos
-        num_augs: 4
-        affine: True
-        conv_weights: [0.0, 0.0, 1.0, 1.0, 0.0]
-        c_weight: 0.0
-        fc_weight: 1.0
-      joint:
-        loss_type: LPIPS
-        size: 224
-        weight: 0.01
-        robust: True
+    curve:                  # 曲线/笔画相关损失 - Curve/stroke-related losses
+      conv:                 # CLIP卷积损失配置 - CLIP convolutional loss configuration
+        model_type: RN101   # CLIP模型类型 - CLIP model type
+        conv_loss_type: L2  # 卷积层损失类型(L2距离) - Convolutional layer loss type (L2 distance)
+        fc_loss_type: Cos   # 全连接层损失类型(余弦距离) - Fully connected layer loss type (cosine distance)
+        num_augs: 4         # 数据增强数量 - Number of data augmentations
+        affine: True        # 是否启用仿射变换增强 - Enable affine transformation augmentation
+        conv_weights: [0.0, 0.0, 1.0, 1.0, 0.0] # 各卷积层权重分配 - Weight allocation for conv layers
+        c_weight: 0.0       # 分类损失权重(未使用) - Classification loss weight (unused)
+        fc_weight: 1.0      # 全连接层权重(强调语义相似性) - FC layer weight (emphasize semantic similarity)
+      joint:                # 联合感知损失配置 - Joint perceptual loss configuration
+        loss_type: LPIPS    # 损失类型(学习感知图像块相似性) - Loss type (Learned Perceptual Image Patch Similarity)
+        size: 224           # 输入图像尺寸(ImageNet标准) - Input image size (ImageNet standard)
+        weight: 0.01        # 联合损失权重 - Joint loss weight
+        robust: True        # 是否启用鲁棒性增强 - Enable robustness enhancement

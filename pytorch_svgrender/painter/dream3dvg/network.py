@@ -201,6 +201,11 @@ class CurveRenderer(nn.Module):
             print(
                 f"Initialized curves: [num_strokes] {self.num_strokes} | [use_point_clouds] {self.use_sfm}"
             )
+
+    def init_properties_dataset(self, dataset):
+        """Initialize properties for dataset-based training mode"""
+        # Similar to init_properties but adapted for dataset mode
+        self.init_properties(dataset)  # Reuse the existing logic
             
     def fps_from_sfm(self, points, num_points: int, colors=None, init_alpha: float = 1.0) -> Tuple[Union[torch.Tensor, int]]:
         """FPS from points in sfm point cloud."""
@@ -383,6 +388,11 @@ class CurveRenderer(nn.Module):
         img = img.unsqueeze(0).permute(0, 3, 1, 2)  # [1, H, W, C] -> [1, C, H, W]
         
         return img
+
+    def initialize_dataset(self, pose: torch.Tensor) -> torch.Tensor:
+        """Initialize strokes for dataset-based training mode."""
+        # For dataset mode, use the same initialization as regular mode
+        return self.initialize(pose)
 
     def init_path(
         self, pose: torch.Tensor, pt: torch.Tensor=None, coord: List =None

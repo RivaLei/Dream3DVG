@@ -1,0 +1,67 @@
+# Image-guided Dream3DVG Configuration
+# 图像引导的Dream3DVG配置文件
+defaults:
+  - dream3dvg
+
+# 核心设置：启用图像约束模式
+from_dataset: True  # 启用图像输入模式而不是纯文本模式
+
+# 图像相关设置
+mask_object: True   # 如果目标图像包含背景，建议遮罩掉背景
+fix_scale: True     # 如果目标图像不是方形，建议固定缩放
+
+# 降低内存使用
+image_size: 256     # 降低分辨率以节省显存
+C_batch_size: 1     # 批量大小设为1
+batch: 4           # 相机采样批量
+
+# 针对图像引导的优化设置
+num_iter: 1500      # 减少迭代次数
+lr: 0.002          # 提高学习率以更快拟合目标图像
+color_lr: 0.002    # 提高颜色学习率
+
+# SDS设置（针对图像引导优化）
+sds:
+  method: 'ism'
+  crop_size: 256
+  guidance_scale: 5.0    # 降低引导强度，让图像约束起主导作用
+  gs_guidance_scale: 3.0  # 降低高斯引导强度
+  grad_scale: 5e-4       # 降低梯度缩放
+  grad_scale_gs: 0.3     # 降低高斯梯度缩放
+  t_range: [ 0.3, 0.7 ]  # 缩小时间范围，更稳定
+  warmup: 200           # 减少预热步数
+  perp_neg: True
+
+# CLIP损失权重（重要：增强图像约束）
+clip:
+  model_name: "RN101"
+  vis_loss: 1.0         # 启用CLIP视觉损失
+  fc_loss_weight: 0.5   # 增强特征匹配权重
+  text_visual_coeff: 0.1 # 降低文本-图像余弦相似度权重
+
+# 损失函数权重调整
+loss_params:
+  curve:
+    conv:
+      model_type: RN101
+      conv_loss_type: L2
+      fc_loss_type: Cos
+      conv_weights: [0.0, 0.0, 1.0, 1.0, 0.0]  # 重点关注中层特征
+      fc_weight: 2.0        # 增强特征层权重
+      c_weight: 0.0
+    joint:
+      loss_type: LPIPS
+      size: 224
+      weight: 0.5          # 增强感知损失权重
+      robust: True
+
+# 相机设置（适合图像引导）
+camera_param:
+  image_w: 256
+  image_h: 256
+  use_progressive: False  # 关闭渐进式相机，使用固定视角更适合图像引导
+  
+# 启用内存优化
+fp16: True
+enable_xformers: True
+gradient_checkpoint: True

@@ -85,8 +85,14 @@ def storePly(path, xyz, rgb):
 def readCircleCamInfo(path, opt):
     print("Reading Test Transforms")
     test_cam_infos = GenerateCircleCameras(opt,render45 = opt.render_45)
+
+    #支持3dgs数据集中现成的初始化点云
     ply_path = os.path.join(path, "init_points3d.ply")
-    
+    ply_path_2 = ply_path
+    ply_path_1 = os.path.join(path, "input.ply")
+    ply_path = ply_path_1 if not os.path.exists(ply_path) else ply_path
+
+
     if not os.path.exists(ply_path) or opt.reinit_points:
         # Since this data set has no colmap data, we start with random points
         num_pts = opt.init_num_pts       
@@ -155,7 +161,15 @@ def readCircleCamInfo(path, opt):
             pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
             storePly(ply_path, xyz, SH2RGB(shs) * 255)
     try:
+        print("Loading ply from ", ply_path)
         pcd = fetchPly(ply_path)
+        #保存pcd到ply_path_2
+        if not os.path.exists(ply_path_2):
+            print("Also store ply to ", ply_path_2)
+            storePly(ply_path_2, pcd.points, pcd.colors * 255)
+        print("Loaded {} points".format(pcd.points.shape[0]))
+        
+
     except:
         pcd = None
 

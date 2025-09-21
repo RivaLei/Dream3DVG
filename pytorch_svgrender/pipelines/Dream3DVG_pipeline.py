@@ -58,7 +58,9 @@ class Dream3DVGPipeline(ModelState):
             custom_scheduler = diffusers.DDIMScheduler
         
         self.precision_t = torch.float16 if self.x_cfg.fp16 else torch.float32
-        if not self.x_cfg.from_dataset:
+        #图像+文本 或文本 引导，都需要计算sds损失
+        if True:
+        # if not self.x_cfg.from_dataset:
             self.diffusion = init_StableDiffusion_pipeline(
                 self.x_cfg.model_id,
                 custom_pipeline=custom_pipeline,
@@ -109,7 +111,10 @@ class Dream3DVGPipeline(ModelState):
             self.image_prompt = self.args.prompt
             
         # 基础文本嵌入 - 后续会根据视角进行插值调整以实现view-dependent特性
-        if not self.x_cfg.from_dataset:
+
+        #图像+文本 或文本 引导，都需要svg_embeddings
+        if True:
+        # if not self.x_cfg.from_dataset:
             # 获取SVG风格的基础文本嵌入（包含多个方向的嵌入：front, back, side等）
             self.svg_embeddings = get_text_embeddings(self.diffusion, self.svg_prompt, self.args.neg_prompt)
         if self.x_cfg.use_gaussian:
@@ -418,7 +423,7 @@ class Dream3DVGPipeline(ModelState):
                     disps = torch.cat(disps, dim=0)
                     opposite_disps = torch.cat(opposite_disps, dim=0)
                 
-                # sketch sds loss
+                # sketch sds loss 【文本与sketch loss】
                 sds_loss, grad = torch.tensor(0), torch.tensor(0)
                 l_tvd = torch.tensor(0)
                 if self.step >= self.x_cfg.sds.warmup or not self.x_cfg.use_gaussian:
@@ -444,6 +449,7 @@ class Dream3DVGPipeline(ModelState):
                     # image loss
                     gs_grad_scale = self.x_cfg.sds.grad_scale_gs
                     sds_loss_gs, grad_gs = torch.tensor(0), torch.tensor(0)
+                    # 【文本与gs render loss】
                     sds_loss_gs, grad_gs, pred_x_0_pos_gs, timestep_gs, vis_pkg = self.diffusion.score_distillation_sampling(
                         method=self.x_cfg.sds.method,
                         pred_rgb=images,
@@ -467,7 +473,9 @@ class Dream3DVGPipeline(ModelState):
                     loss_gs = sds_loss_gs + 1. * loss_tv + 1. * loss_scale
                     
                     # sketch loss
-                    if self.x_cfg.use_pseudo:
+                    # 影像作为引导时，只考虑 高斯渲染的素描图像之间的loss 不考虑difuusion 预测的图像
+                    if not self.x_cfg.from_dataset and self.x_cfg.use_pseudo:
+                    # if self.x_cfg.use_pseudo:
                         clip_loss = self.image_sketch_loss(raster_sketches, pred_x_0_pos_gs, train=True)
                     else:
                         clip_loss = self.image_sketch_loss(raster_sketches, images.detach(), train=True)

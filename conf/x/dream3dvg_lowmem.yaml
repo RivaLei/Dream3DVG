@@ -1,0 +1,49 @@
+# Low Memory Configuration for Dream3DVG
+# Optimized for 16GB GPU memory
+defaults:
+  - dream3dvg
+
+# Override memory-intensive settings
+image_size: 256  # Reduce from 512 to 256
+C_batch_size: 1  # Reduce from 4 to 1
+batch: 4         # Reduce from 10 to 4
+
+# SDS optimizations
+sds:
+  method: 'ism'
+  crop_size: 256   # Match image_size
+  guidance_scale: 2.
+  gs_guidance_scale: 5.0  # Reduce from 7.5 to 5.0
+  grad_scale: 1e-3
+  grad_scale_gs: 0.5      # Reduce from 1.0 to 0.5
+  t_range: [ 0.2, 0.8 ]   # Narrow range
+  warmup: 5000            # Reduce from 10000
+  perp_neg: True
+
+# Camera settings
+camera_param:
+  image_w: 256    # Match image_size
+  image_h: 256    # Match image_size
+  init_num_pts: 50_000  # Reduce from 100_000
+
+# Gaussian parameters
+gaussian_param:
+  sh_degree: 0
+  percent_dense: 0.005    # Slightly increase for fewer iterations
+  densify_from_iter: 200  # Start later
+  densify_until_iter: 1500 # End earlier
+
+# Training optimizations
+num_iter: 1500      # Reduce from 2000
+eval_freq: 200      # More frequent evaluation
+desc_freq: 10       # Less frequent logging
+
+# Memory-friendly augmentations
+clip:
+  num_aug: 2        # Reduce from 4
+  
+# Enable all memory optimizations
+fp16: True
+enable_xformers: True
+gradient_checkpoint: True
+ldm_speed_up: True

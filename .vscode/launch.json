@@ -72,6 +72,100 @@
             },
             "justMyCode": false,
             "stopOnEntry": false
+        },
+        {
+            "name": "Dream3DVG - Image Guided (Sketch)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/svg_render.py",
+            "args": [
+                "x=dream3dvg_image",
+                "seed=1",
+                "x.style=sketch",
+                "x.num_paths=32",
+                "target=./input_images/dtu_scan24_max/rect_014_max.png",
+                "prompt=A sketch of building",
+                "result_path=./workspace/3dvg/dtu_scan24_max_sfm",
+                // "result_path=./workspace/3dvg/dtu_scan24_max",
+                "x.camera_param.init_prompt=A sketch of building"
+                
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0",
+                "PYTORCH_CUDA_ALLOC_CONF": "max_split_size_mb:128"
+            },
+            "justMyCode": false,
+            "stopOnEntry": false
+        },
+        {
+            "name": "Dream3DVG - Image Guided (Iconography)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/svg_render.py",
+            "args": [
+                "x=dream3dvg_image",
+                "seed=2",
+                "x.style=iconography",
+                "x.num_paths=64",
+                "target=./input_images/example.jpg",
+                "prompt=An icon illustration",
+                "result_path=./workspace/3dvg/icon_example",
+                "x.camera_param.init_prompt=An icon of example"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0",
+                "PYTORCH_CUDA_ALLOC_CONF": "max_split_size_mb:128"
+            },
+            "justMyCode": false,
+            "stopOnEntry": false
+        },
+        {
+            "name": "Dream3DVG - Image Guided (Custom)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/svg_render.py",
+            "args": [
+                "x=dream3dvg_image",
+                "seed=1",
+                "x.style=sketch",
+                "x.num_paths=32",
+                "target=${input:targetImage}",//调用vs code启动时的交互式输入参数
+                "prompt=${input:promptText}",
+                "result_path=./workspace/3dvg/${input:outputName}",
+                "x.camera_param.init_prompt=${input:promptText}"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0",
+                "PYTORCH_CUDA_ALLOC_CONF": "max_split_size_mb:128"
+            },
+            "justMyCode": false,
+            "stopOnEntry": false
+        }
+    ],
+    "inputs": [
+        {
+            "id": "targetImage",
+            "description": "请输入目标图像路径",
+            "default": "./input_images/example.jpg",
+            "type": "promptString"
+        },
+        {
+            "id": "promptText",
+            "description": "请输入文本提示",
+            "default": "A sketch drawing",
+            "type": "promptString"
+        },
+        {
+            "id": "outputName",
+            "description": "请输入输出文件夹名称",
+            "default": "custom_output",
+            "type": "promptString"
         }
     ]
 }

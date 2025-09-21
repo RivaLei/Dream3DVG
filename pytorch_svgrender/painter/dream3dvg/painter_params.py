@@ -112,7 +112,9 @@ class Painter:
         else:
             init = None
         if self.save_init:
-            init_svg_path = dataset.ply_path.replace('init_points3d.ply', 'svg_init.png')
+            # 确保从ply路径正确生成png路径
+            ply_dir = os.path.dirname(dataset.ply_path)
+            init_svg_path = os.path.join(ply_dir, 'svg_init.png')
             self.save_raster_svg(init, init_svg_path)
         return init
     
