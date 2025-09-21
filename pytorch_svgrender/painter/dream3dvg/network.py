@@ -98,13 +98,17 @@ class CurveRenderer(nn.Module):
             'iconography': (True, True, False),
         }.get(self.style, (False, False, False))
         
-        # alpha optimization
+        # alpha optimization - 视角相关的透明度/颜色优化
         self.use_viewnet = use_viewnet
         
         if self.use_viewnet:
             if self.style == 'sketch':
+                # 素描风格：只预测透明度（单一值）
+                # 原因：素描通常使用固定颜色（黑色），只需控制线条的显示强度
                 self.alpha_net = ViewpointModel(output_dim=1).to(self.device)
             elif self.style == 'iconography':
+                # 图标风格：预测完整RGBA四通道
+                # 原因：图标需要丰富色彩，不同视角可能需要不同颜色表现
                 self.alpha_net = ViewpointModel(output_dim=4).to(self.device)
 
         self.add_noise = add_noise
@@ -114,13 +118,30 @@ class CurveRenderer(nn.Module):
         self.pts_dist_thres = pts_dist_thres
 
         # initailize parameters as zero or an empty set
-        self.shapes = {}
-        self.shapes_xing = []
-        self.shape_groups = {}
-        self.point_params = []
-        self.color_params = []
-        self.width_params = []
-        self.optimize_flag = []
+        # 初始化SVG渲染相关的核心数据结构 - SVG rendering core data structures
+        
+
+        # SVG几何存储 - SVG geometry storage
+        self.shapes = {}  # 字典：存储3D控制点到SVG路径的映射 {torch.Tensor(3D_points): pydiffvg.Path}
+                         # Dictionary: Maps 3D control points to SVG path objects
+        self.shapes_xing = []  # 列表：扩展形状存储（预留接口，当前未使用）
+                              # List: Extended shape storage (reserved interface, currently unused)
+        
+        # SVG属性管理 - SVG attributes management  
+        self.shape_groups = {}  # 字典：存储3D控制点到SVG形状组的映射 {torch.Tensor(3D_points): pydiffvg.ShapeGroup}
+                               # Dictionary: Maps 3D control points to SVG shape groups (colors, stroke, fill properties)
+        
+        # 优化参数容器 - Optimization parameter containers
+        self.point_params = []  # 列表：存储所有可优化的3D控制点参数 [torch.Tensor([N,3]), ...]
+                               # List: All optimizable 3D control point parameters for gradient optimization
+        self.color_params = []  # 列表：存储所有可优化的颜色参数 [torch.Tensor([R,G,B,A]), ...]
+                               # List: All optimizable color parameters (RGBA values)
+        self.width_params = []  # 列表：存储所有可优化的线宽参数（预留接口）
+                               # List: All optimizable stroke width parameters (reserved interface)
+        
+        # 优化控制标志 - Optimization control flags
+        self.optimize_flag = []  # 列表：标记每个形状是否参与优化 [bool, bool, ...]
+                                # List: Boolean flags indicating which shapes participate in optimization
 
         # initialize basic attributes related to dataset
         self.H: int = None
@@ -471,61 +492,111 @@ class CurveRenderer(nn.Module):
             shapes_2d = list(self.shapes.values())
             shape_groups = list(self.shape_groups.values())
             
+            # =====================================================================
+            # 视角相关透明度控制系统 - View-dependent Transparency Control System
+            # =====================================================================
+            # 该系统实现了智能的笔画可见性控制，结合神经网络预测和几何深度信息，
+            # 确保从不同视角观看时只显示相关的笔画，提高3D感知效果。
+            # 
+            # This system implements intelligent stroke visibility control by combining
+            # neural network predictions with geometric depth information to ensure
+            # only relevant strokes are shown from different viewpoints, enhancing 3D perception.
+            #
+            # 工作流程 - Workflow:
+            # 1. 神经网络重要性预测：使用ViewpointModel预测每个笔画的重要性分数
+            # 2. 几何深度投票：通过多视角深度一致性检验验证笔画的几何合理性  
+            # 3. 双重过滤决策：结合两者信息做出最终的透明度决策
+            # =====================================================================
             if self.use_viewnet:
                 if not init:
-                    # importance_filter, mlp version
-                    num_points_per_path = 32 # k
+                    # ===== 第一步：神经网络重要性预测过滤 =====
+                    # Importance filtering using neural network (MLP version)
+                    num_points_per_path = 32  # 每条贝塞尔曲线采样的点数 - Each bezier curve is sampled into 32 points
+                    
                     with torch.no_grad():
+                        # 为每个参数化的控制点生成3D空间中的贝塞尔曲线采样点
+                        # Generate 3D bezier curve sample points for each parameterized control point
                         points_3d = []
                         for point in self.point_params:
                             points_3d.append(self.bezier_curve_3d(point, num_points=num_points_per_path))
-                        points_3d = torch.cat(points_3d, dim=0).view(-1, num_points_per_path, 3) # (num_path, k, 3)
+                        points_3d = torch.cat(points_3d, dim=0).view(-1, num_points_per_path, 3)  # (num_path, k, 3)
                     
-                        # point to camera depth
+                        # 计算每个3D点到相机的深度值 - Calculate depth from each 3D point to camera
+                        # 使用相机姿态矩阵将3D点变换到相机坐标系，提取Z轴深度
                         point_depths = (torch.einsum("hwn,mn->hwm", points_3d, pose[:3, :3]) + pose[:3,-1].view(1, 1, 3))[..., -1]
 
-                    point_alphas = self.alpha_net(points_3d, point_depths).squeeze(-1)
-                    curve_alphas = torch.mean(point_alphas, dim=-1)
+                    # 使用ViewpointModel神经网络预测每个点的重要性分数
+                    # Use ViewpointModel neural network to predict importance score for each point
+                    # SKETCH风格：只预测透明度值（单通道输出） - SKETCH style: only predict alpha values (single channel output)
+                    point_alphas = self.alpha_net(points_3d, point_depths).squeeze(-1)  # [B*N, 1] -> [B*N] 预测点的重要性
+                    curve_alphas = torch.mean(point_alphas, dim=-1)  # 计算每条曲线的平均重要性 - Calculate average importance for each curve
 
+                    # 神经网络重要性阈值过滤：重要性>0.75的点被认为是重要的
+                    # Neural network importance threshold filtering: points with importance > 0.75 are considered important
                     alpha_filter = point_alphas > 0.75
                     
-                    # assign curve importance as curve opacity for train alpha_net, using unimportance curves
+                    # 为每个笔画组分配神经网络预测的透明度，保持原有RGB颜色不变
+                    # Assign neural network predicted alpha values to each stroke group while preserving original RGB colors
                     for ind, shape_group in enumerate(shape_groups):
-                        curve_alpha = curve_alphas[ind]
-                        rgb = shape_group.stroke_color[:3].detach()
-                        adaptive_color = torch.cat((rgb, curve_alpha.unsqueeze(-1)), dim=-1)
+                        curve_alpha = curve_alphas[ind]  # 获取该曲线的神经网络预测平均透明度 - Get NN predicted average alpha for this curve
+                        rgb = shape_group.stroke_color[:3].detach()  # 保持原有RGB颜色（通常是黑色）- Preserve original RGB color (usually black)
+                        # 只更新alpha通道，实现视角相关的透明度控制 - Only update alpha channel for view-dependent transparency control
+                        adaptive_color = torch.cat((rgb, curve_alpha.unsqueeze(-1)), dim=-1)  # [R,G,B,A]
                         shape_group.stroke_color = adaptive_color
                     
-                    # depth voting
+                    # ===== 第二步：几何深度投票机制 =====
+                    # Geometric depth voting mechanism for view consistency
+                    
                     if depth is not None and opposite_depth is not None:
+                        # 计算对向视角下每个3D点的深度值 - Calculate depth of each 3D point from opposite viewpoint
                         point_depths_opposite = (torch.einsum("hwn,mn->hwm", points_3d, opposite_pose[:3, :3]) + opposite_pose[:3, -1].view(1, 1, 3))[..., -1]
-                        # pixel depth from depth map
-                        pixel_depths = self.sample_depth_value(points_3d, pose, depth, intrinsic)
-                        pixel_depths_opposite = self.sample_depth_value(points_3d, opposite_pose, opposite_depth, intrinsic)
                         
-                        # pixel-pixel depth range
+                        # 从深度图中采样得到像素级的真实深度值 - Sample real pixel-level depth values from depth maps
+                        pixel_depths = self.sample_depth_value(points_3d, pose, depth, intrinsic)  # 当前视角深度图采样
+                        pixel_depths_opposite = self.sample_depth_value(points_3d, opposite_pose, opposite_depth, intrinsic)  # 对向视角深度图采样
+                        
+                        # 计算两个视角间像素深度的差异范围，用于容差判断
+                        # Calculate pixel depth difference range between two viewpoints for tolerance judgment
                         depth_range = torch.abs(pixel_depths - pixel_depths_opposite)
                         
-                        diff_pos = torch.abs(point_depths - pixel_depths) - depth_range * 0.25
-                        diff_neg = torch.abs(point_depths_opposite - pixel_depths_opposite) 
+                        # 几何一致性判断：比较几何深度与像素深度的差异
+                        # Geometric consistency judgment: compare differences between geometric and pixel depths
+                        diff_pos = torch.abs(point_depths - pixel_depths) - depth_range * 0.25  # 当前视角的深度误差（带容差）
+                        diff_neg = torch.abs(point_depths_opposite - pixel_depths_opposite)     # 对向视角的深度误差
                         
+                        # 深度投票：当前视角误差小于对向视角误差时，认为该点在前景
+                        # Depth voting: when current view error < opposite view error, consider the point as foreground
                         depth_filter = diff_pos < diff_neg
                         
+                        # ===== 第三步：双重过滤的最终透明度决策 =====
+                        # Final transparency decision with dual filtering
                         for ind, shape_group in enumerate(shape_groups):
-                            if not alpha_filter[ind].all(): # for curves not important, depth voting
+                            # 对于神经网络判断为不重要的曲线，使用深度投票进行进一步筛选
+                            # For curves deemed unimportant by neural network, use depth voting for further filtering
+                            if not alpha_filter[ind].all():  
+                                # 深度投票：如果75%以上的采样点通过深度一致性检验，认为在前景
+                                # Depth voting: if >75% sample points pass depth consistency test, consider as foreground
                                 if depth_filter[ind].sum() >= num_points_per_path * 0.75: 
-                                    shape_group.stroke_color.data[-1].clamp_(1.0, 1.0) # -> front view
+                                    shape_group.stroke_color.data[-1].clamp_(1.0, 1.0)  # 前景：完全不透明 -> front view: fully opaque
                                 else:
-                                    shape_group.stroke_color.data[-1].clamp_(0.0, 1.0) if not is_test else shape_group.stroke_color.data[-1].clamp_(0.2, 0.2)# -> back view, render with 0.2 when test
-                            else: # if important, set opacity = 1.0
+                                    # 背景：训练时完全透明，测试时保持0.2透明度便于观察
+                                    # Background: fully transparent during training, 0.2 alpha during testing for visibility
+                                    shape_group.stroke_color.data[-1].clamp_(0.0, 1.0) if not is_test else shape_group.stroke_color.data[-1].clamp_(0.2, 0.2)
+                            else: 
+                                # 神经网络判断为重要的曲线：强制设为完全不透明，确保关键笔画可见
+                                # Curves deemed important by neural network: force fully opaque to ensure key strokes are visible
                                 shape_group.stroke_color.data[-1].clamp_(1.0, 1.0)
         
-                # init -> show all curves
+                # ===== 初始化阶段：显示所有曲线 =====
+                # Initialization phase: show all curves
                 else:
+                    # 初始化时所有笔画都设为完全不透明，确保完整的初始SVG可见
+                    # During initialization, all strokes are set to fully opaque to ensure complete initial SVG visibility
                     for ind, shape_group in enumerate(shape_groups):
                         shape_group.stroke_color.data[-1].clamp_(1.0, 1.0)
             
-            # render                      
+            # render 
+                     
             scene_args = pydiffvg.RenderFunction.serialize_scene(
                 self.W, self.H, shapes_2d, shape_groups
             )
@@ -554,15 +625,17 @@ class CurveRenderer(nn.Module):
                     # point to camera depth
                     point_depths = (torch.einsum("hwn,mn->hwm", points_3d, pose[:3, :3]) + pose[:3, -1].view(1, 1, 3))[..., -1] # (num_paths*4, k)
 
-                # importance
-                point_alphas = self.alpha_net(points_3d, point_depths) # (num_paths*4, k, 4)
-                curve_alphas = torch.mean(point_alphas, dim=1) # （num_paths*4, 1, 4）
+                # ICONOGRAPHY风格：预测完整RGBA四通道
+                point_alphas = self.alpha_net(points_3d, point_depths)  # (num_paths*4, k, 4) 预测每个点的RGBA值
+                curve_alphas = torch.mean(point_alphas, dim=1)  # （num_paths*4, 4）计算每条曲线的平均RGBA
                 
-                alpha_filter = (point_alphas[:,:,-1] > 0.75).view(len(self.shapes), -1)
+                alpha_filter = (point_alphas[:,:,-1] > 0.75).view(len(self.shapes), -1)  # 基于alpha通道的重要性过滤
                 
+                # 为每个图标形状分配完整的RGBA颜色
                 for ind, shape_group in enumerate(shape_groups):
-                    adaptive_color = curve_alphas[ind*4: (ind+1)*4, ...].mean(dim=0)
-                    shape_group.fill_color = adaptive_color
+                    # 每个图标由4条贝塞尔曲线组成，计算这4条曲线的平均RGBA
+                    adaptive_color = curve_alphas[ind*4: (ind+1)*4, ...].mean(dim=0)  # 平均RGBA值
+                    shape_group.fill_color = adaptive_color  # 直接设置填充颜色（包含RGB和A）
                 
                 # depth voting
                 if depth is not None and opposite_depth is not None:
@@ -608,7 +681,7 @@ class CurveRenderer(nn.Module):
                     self.W, self.H, shapes_2d, shape_groups
                 )
         
-        _render = pydiffvg.RenderFunction.apply
+        _render = pydiffvg.RenderFunction.apply#diffvg渲染流程：serialize_scene && apply
         
         img = _render(
             self.W,  # width
@@ -731,10 +804,16 @@ class CurveRenderer(nn.Module):
 
     def gui(self) -> None:
         pass
-                
+
+# 功能：基于3D点位置和深度信息，预测该点在当前视角下的重要性/透明度。                
 class ViewpointModel(nn.Module):
     def __init__(self, input_dim=3, output_dim=1):
         super(ViewpointModel, self).__init__()
+        # 网络结构：
+        # 输入维度：3D坐标 (x,y,z) + 深度值
+        # 位置编码：使用正弦余弦函数进行高频编码
+        # 隐藏层：128 → 64 → output_dim
+        # 激活函数：ReLU + Sigmoid输出
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.freq_embed, mlp_input_dim = self.get_embedder()
@@ -745,6 +824,7 @@ class ViewpointModel(nn.Module):
         self.fc3 = nn.Linear(64, output_dim)
         self.act = nn.Sigmoid()
         self.init_weights()
+        
 
     def init_weights(self):
         for m in self.modules():

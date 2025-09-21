@@ -42,7 +42,7 @@ echo "Diffusers installation is complete. version: 0.20.2"
 unset http_proxy https_proxy && pip install xformers==0.0.16
 
 # Clone and set up DiffVG, handling dependencies on Ubuntu
-# git clone https://github.com/BachiLi/diffvg.git
+git clone https://github.com/BachiLi/diffvg.git
 cd diffvg
 git submodule update --init --recursive
 

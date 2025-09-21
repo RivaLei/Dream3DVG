@@ -12,8 +12,6 @@ conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cud
 
 conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 cpuonly -c pytorch
 
-
-
 # ROCM 5.2 (Linux only)
 
 pip install torch==1.13.1+rocm5.2 torchvision==0.14.1+rocm5.2 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/rocm5.2
@@ -29,7 +27,6 @@ pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 --e
 # CPU only
 
 pip install torch==1.13.1+cpu torchvision==0.14.1+cpu torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cpu
-
 
 riva 复制 nef
 
@@ -56,4 +53,18 @@ python=3.10
 Use "conda info `<package>`" to see the dependencies for each package.
 看到conda升级Python时出现了依赖冲突。这通常是因为当前环境中的一些包与Python 3.10不兼容。最好的解决方案是创建一个新的Python 3.10环境。
 
-让我帮您创建一个新的conda环境：
+
+
+# diffusion
+
+init_StableDiffusion_pipeline()
+
+连接预训练模型与SVG生成：将HuggingFace的Stable Diffusion模型适配为SVG生成任务
+
+需要下载很大的预训练模型--直接home内存不够。。。。
+
+/home/lz/.conda/envs/3dvg/lib/python3.8/site-packages/huggingface_hub/file_download.py:991: UserWarning: Not enough free disk space to download the file. The expected file size is: 3463.73 MB. The target location /home/lz/.cache/huggingface/hub/models--stabilityai--stable-diffusion-2-1-base/blobs only has 2024.44 MB free disk space.
+
+如果实在不能下载，就不初始化diffusion 本来就不想用到文本-sketch
+
+【最近就得买了 只有10+G 双11买内存放到ubuntu】

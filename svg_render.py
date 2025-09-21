@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Author: ximing xing
-# Description: the main func of this project.
+# Description: Dream3DVG项目的主入口文件，用于各种SVG渲染方法的统一调用
 # Copyright (c) 2023, XiMing Xing.
 
 import os
@@ -11,24 +11,26 @@ from accelerate.utils import set_seed
 import hydra
 import omegaconf
 
+# 将当前目录添加到Python路径中，确保可以导入本地模块
 sys.path.append(os.path.split(os.path.abspath(os.path.dirname(__file__)))[0])
 
 from pytorch_svgrender.utils import render_batch_wrap, get_seed_range
 
+# 支持的SVG渲染方法列表
 METHODS = [
-    'diffvg',
-    'live',
-    'vectorfusion',
-    'clipasso',
-    'clipascene',
-    'diffsketcher',
-    'stylediffsketcher',
-    'clipdraw',
-    'styleclipdraw',
-    'wordasimage',
-    'clipfont',
-    'svgdreamer',
-    'dream3dvg',
+    'diffvg',          # 图像转SVG方法
+    'live',            # LIVE图像转SVG方法  
+    'vectorfusion',    # 文本转SVG方法
+    'clipasso',        # 图像转素描方法
+    'clipascene',      # CLIP场景渲染方法
+    'diffsketcher',    # 扩散模型素描生成方法
+    'stylediffsketcher', # 风格化扩散素描方法
+    'clipdraw',        # CLIP绘图方法
+    'styleclipdraw',   # 风格化CLIP绘图方法
+    'wordasimage',     # 文字转图像方法
+    'clipfont',        # CLIP字体生成方法
+    'svgdreamer',      # SVG梦想家文本转SVG方法
+    'dream3dvg',       # Dream3DVG 3D矢量图形生成方法（本项目核心）
 ]
 
 @hydra.main(version_base=None, config_path="conf", config_name='config')

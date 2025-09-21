@@ -108,10 +108,12 @@ class Dream3DVGPipeline(ModelState):
             self.svg_prompt = self.args.prompt + ', minimal 2d art drawing, on a white background, black and white.'
             self.image_prompt = self.args.prompt
             
-        # view-dependent embeddings
+        # 基础文本嵌入 - 后续会根据视角进行插值调整以实现view-dependent特性
         if not self.x_cfg.from_dataset:
+            # 获取SVG风格的基础文本嵌入（包含多个方向的嵌入：front, back, side等）
             self.svg_embeddings = get_text_embeddings(self.diffusion, self.svg_prompt, self.args.neg_prompt)
         if self.x_cfg.use_gaussian:
+            # 获取图像风格的基础文本嵌入
             self.image_embeddings = get_text_embeddings(self.diffusion, self.image_prompt, self.args.neg_prompt)
         
         # loss for dataset
@@ -152,7 +154,11 @@ class Dream3DVGPipeline(ModelState):
             x_augs.append(augmented_pair[0].unsqueeze(0))
         xs = torch.cat(x_augs, dim=0)
         return xs
-                
+    
+    #  在训练过程中逐步扩大相机的视角范围，实现从简单视角到复杂视角的渐进学习。   
+    # 扩大视场角范围：从窄视角逐步扩展到广视角
+    # 边界限制：确保不超过预设的最大/最小FOV范围
+    # 渐进学习：先学习标准透视，再适应广角/鱼眼效果
     def progressive_camera(self):
         self.scene.pose_args.fovy_range[0] = max(self.scene.pose_args.max_fovy_range[0], self.scene.pose_args.fovy_range[0] * self.x_cfg.camera_param.fovy_scale_up_factor[0])
         self.scene.pose_args.fovy_range[1] = min(self.scene.pose_args.max_fovy_range[1], self.scene.pose_args.fovy_range[1] * self.x_cfg.camera_param.fovy_scale_up_factor[1])
@@ -248,18 +254,60 @@ class Dream3DVGPipeline(ModelState):
                 viewpoint_stack = self.scene.getRandTrainCameras(batch=self.x_cfg.batch).copy()
                 
                 C_batch_size = self.x_cfg.C_batch_size
-                raster_sketches = []
-                images = []
-                depths = []
-                scales = []
-                alphas = []
-                weights_ = []
-                weights_gs_ = []
-                text_z_ = []
-                text_z_gs_ = []
-                opposite_depths = []
-                disps = []
-                opposite_disps = []
+                
+                # =====================================================================
+                # 批量渲染数据存储容器 - Batch rendering data storage containers
+                # =====================================================================
+                # 用于存储多个相机视角的渲染结果，实现批量处理和优化
+                # Used to store rendering results from multiple camera viewpoints for batch processing and optimization
+                
+                raster_sketches = []    # 存储栅格化的SVG素描图像 - List of rasterized SVG sketch images
+                                       # 每个元素: torch.Tensor [1, 3, H, W] - 单个视角的RGB图像
+                                       # Each element: torch.Tensor [1, 3, H, W] - RGB image from single viewpoint
+
+                images = []            # 存储3D高斯渲染的真实感图像 - List of photorealistic images from 3D Gaussian rendering  
+                                      # 每个元素: torch.Tensor [3, H, W] - 高斯模型渲染的RGB图像
+                                      # Each element: torch.Tensor [3, H, W] - RGB image rendered by Gaussian model
+
+                depths = []            # 存储深度图 - List of depth maps
+                                      # 每个元素: torch.Tensor [1, H, W] - 当前视角的深度信息
+                                      # Each element: torch.Tensor [1, H, W] - depth information from current viewpoint
+
+                scales = []            # 存储3D高斯的缩放参数 - List of 3D Gaussian scaling parameters
+                                      # 每个元素: torch.Tensor - 高斯椭球的3D缩放因子
+                                      # Each element: torch.Tensor - 3D scaling factors for Gaussian ellipsoids
+
+                alphas = []            # 存储透明度/不透明度信息 - List of alpha/opacity information
+                                      # 每个元素: torch.Tensor [1, H, W] - 像素级透明度值
+                                      # Each element: torch.Tensor [1, H, W] - per-pixel alpha values
+
+                weights_ = []          # 存储SDS损失的权重参数 - List of weights for SDS loss computation
+                                      # 用于perpendicular negative方法的权重调整
+                                      # Used for weight adjustment in perpendicular negative method
+
+                weights_gs_ = []       # 存储高斯模型SDS损失的权重参数 - List of weights for Gaussian SDS loss
+                                      # 对应高斯渲染图像的权重调整参数
+                                      # Weight adjustment parameters for Gaussian rendered images
+
+                text_z_ = []           # 存储SVG风格的视角相关文本嵌入 - List of view-dependent text embeddings for SVG style
+                                      # 每个元素: torch.Tensor [2, 77, 768] - [无条件嵌入, 视角插值嵌入]
+                                      # Each element: torch.Tensor [2, 77, 768] - [unconditional, view-interpolated embeddings]
+
+                text_z_gs_ = []        # 存储图像风格的视角相关文本嵌入 - List of view-dependent text embeddings for image style  
+                                      # 用于指导3D高斯模型的渲染过程
+                                      # Used to guide the 3D Gaussian model rendering process
+
+                opposite_depths = []   # 存储相对视角的深度图 - List of depth maps from opposite viewpoints
+                                      # 每个元素: torch.Tensor [1, H, W] - 180度相对视角的深度信息
+                                      # Each element: torch.Tensor [1, H, W] - depth from 180° opposite viewpoint
+
+                disps = []            # 存储视差图(用于可视化) - List of disparity maps for visualization
+                                     # 每个元素: torch.Tensor [1, H, W] - 视差 = 1/深度
+                                     # Each element: torch.Tensor [1, H, W] - disparity = 1/depth
+
+                opposite_disps = []   # 存储相对视角的视差图 - List of disparity maps from opposite viewpoints
+                                     # 用于深度投票机制中的几何一致性检验
+                                     # Used for geometric consistency check in depth voting mechanism
 
                 
                 text_z_inverse = torch.cat([self.svg_embeddings['uncond'], self.svg_embeddings['inverse']], dim=0)
@@ -272,18 +320,25 @@ class Dream3DVGPipeline(ModelState):
                     except:
                         viewpoint_stack = self.scene.getRandTrainCameras().copy()
                         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-                    azimuth = viewpoint_cam.delta_azimuth
                     
-                    #pred text_z
-                    text_z = [self.svg_embeddings['uncond']]
+                    # 获取当前相机的方位角 - 这是实现view-dependent的关键参数
+                    azimuth = viewpoint_cam.delta_azimuth  # 相对于默认视角的方位角偏移
                     
-                    # interpolate view embeddings
+                    # 构建视角相关的文本嵌入
+                    text_z = [self.svg_embeddings['uncond']]  # 无条件嵌入
+                    
+                    # *** 这里是view-dependent的核心实现 ***
+                    # 根据当前视角的方位角，动态调整文本嵌入
                     if self.x_cfg.sds.perp_neg:
+                        # 方法1：使用perpendicular negative方法调整嵌入
                         text_z_comp, weights = adjust_text_embeddings(self.svg_embeddings, azimuth)
                         text_z.append(text_z_comp)
                         weights_.append(weights)
                     else:
+                        # 方法2：在不同方向的嵌入之间进行插值
+                        # 例如：前视角(0°) + 侧视角(90°) + 后视角(180°) 根据azimuth进行插值
                         text_z.append(interpolate_embeddings(self.svg_embeddings, azimuth))
+
                     text_z = torch.cat(text_z, dim=0)
                     text_z_.append(text_z)
                     
@@ -331,6 +386,7 @@ class Dream3DVGPipeline(ModelState):
                             opposite_depths.append(opposite_depth)
                             opposite_disps.append(opposite_disp)
                     
+                    # render_svg
                     if self.x_cfg.use_gaussian:     
                         raster_sketch = self.sketcher.renderer(
                             viewpoint_cam.world_view_transform.T, 

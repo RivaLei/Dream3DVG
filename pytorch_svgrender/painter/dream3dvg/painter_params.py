@@ -62,22 +62,26 @@ class Painter:
         }
         self.optimizer: Optimizer = None
 
+        # 多层次损失函数配置 - 用于优化SVG生成质量
         loss_params = {
+            # 卷积特征损失 - 基于ResNet的深度特征比较
             'conv': {
-                'model_type': 'RN101',
-                'conv_loss_type': 'L2',
-                'fc_loss_type': 'Cos',
-                'num_augs': 4,
-                'affine': True,
-                'conv_weights': [0.0, 0.0, 1.0, 1.0, 0.0],
-                'c_weight': 0.0,
-                'fc_weight': 75.0
+                'model_type': 'RN101',                              # 使用ResNet-101作为特征提取器
+                'conv_loss_type': 'L2',                             # 卷积特征使用L2距离损失
+                'fc_loss_type': 'Cos',                              # 全连接特征使用余弦相似性损失
+                'num_augs': 4,                                      # 数据增强数量，提高训练鲁棒性
+                'affine': True,                                     # 启用仿射变换增强
+                # ResNet各层权重: [layer1, layer2, layer3, layer4, layer5]
+                'conv_weights': [0.0, 0.0, 1.0, 1.0, 0.0],        # 重点关注中高层特征(形状+语义)
+                'c_weight': 0.0,                                    # 分类损失权重(未使用)
+                'fc_weight': 75.0                                   # 全连接层高权重,强调语义相似性
             },
+            # 联合感知损失 - 基于人类视觉感知的图像相似性
             'joint':{
-                'loss_type': 'LPIPS',
-                'size': 224,
-                'weight': 1.0,
-                'robust': False
+                'loss_type': 'LPIPS',                               # 学习感知图像块相似性损失
+                'size': 224,                                        # 标准ImageNet输入尺寸
+                'weight': 1.0,                                      # 基础权重
+                'robust': False                                     # 不使用鲁棒性增强
             }
         }
         
